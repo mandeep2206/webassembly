@@ -1,291 +1,79 @@
 # Rust and Webassembly
 
-## Setup
+## Installation
 
-This section describes how to set up the toolchain for compiling Rust programs to WebAssembly and integrate them into JavaScript.
-The Rust Toolchain
+Cargo is the Rust package manager.Broadly speaking, a package manager is a program (or collection of related programs) in a software ecosystem that automates the process of obtaining, installing, and upgrading artifacts. Within a programming language ecosystem, a package manager is a developer-focused tool whose primary functionality is to download library artifacts and their dependencies from some central repository; this capability is often combined with the ability to perform software builds (by invoking the language-specific compiler).
 
-You will need the standard Rust toolchain, including `rustup`, `rustc`, and `cargo`.
+ Cargo downloads your Rust package's dependencies, compiles your packages, makes distributable packages, and uploads them to crates.io, the Rust community’s package registry.
 
-[Follow these instructions to install the Rust toolchain.](https://www.rust-lang.org/tools/install)
+The easiest way to get Cargo is to install the current stable release of Rust by using rustup. Installing Rust using rustup will also install cargo.
 
-The Rust and WebAssembly experience is riding the Rust release trains to stable! That means we don't require any experimental feature flags. However, we do require Rust 1.30 or newer.
+On Linux and macOS systems, this is done as follows:
 
-**`wasm-pack`**
+`curl https://sh.rustup.rs -sSf | sh`
 
-wasm-pack is your one-stop shop for building, testing, and publishing Rust-generated WebAssembly.
+It will download a script, and start the installation. If everything goes well, you’ll see this appear:
 
-[Get wasm-pack here!](https://rustwasm.github.io/wasm-pack/installer/)
+`Rust is installed now. Great!`
 
-**`cargo-generate`**
+For other installation options and information, visit the [install](https://www.rust-lang.org/tools/install) page of the Rust website.
 
-cargo-generate helps you get up and running quickly with a new Rust project by leveraging a pre-existing git repository as a template.
+The cargo-wasi project is a subcommand for Cargo which provides a convenient set of defaults for building and running Rust code on the [wasm32-wasi target](https://wasi.dev/). 
 
-Install **`cargo-generate`** with this command:
+Once you've got Rust installed you can install cargo-wasi with:
 
-`cargo install cargo-generate`
+`$ cargo install cargo-wasi`
 
-**`npm`**
+This will install a precompiled binary for most major platforms or install from source if we don't have a precompiled binary for your platform.
 
-npm is a package manager for JavaScript. We will use it to install and run a JavaScript bundler and development server. At the end of the tutorial, we will publish our compiled .wasm to the npm registry.
+To verify that your installation works, you can execute:
 
-[Follow these instructions to install npm.](https://docs.npmjs.com/getting-started)
+`$ cargo wasi --version`
 
-If you already have npm installed, make sure it is up to date with this command:
+and that should print both the version number as well as git information about where the binary was built from.
 
-`npm install npm@latest -g`
+Now that everything is set, let's build some code for wasi!
+
+## Building from Source
+
+Installing from crates.io via cargo install cargo-wasi will install precompiled binaries. These binaries are built on the cargo-wasi repository's CI and are uploaded to crates.io as part of the publication process. If you'd prefer to install from source, you can execute this command instead:
+
+`$ cargo install cargo-wasi-src`
 
 
 
 ## Hello World!
 
-This section will show you how to build and run your first Rust and WebAssembly program: a Web page that alerts "Hello, World!"
-
-Make sure you have followed the setup instructions before beginning.
-
-Clone the Project Template
-
-The project template comes pre-configured with sane defaults, so you can quickly build, integrate, and package your code for the Web.
-
-Clone the project template with this command:
-
-`cargo generate --git https://github.com/rustwasm/wasm-pack-template`
-
-This should prompt you for the new project's name. We will use **"wasm-game-of-life"**.
-
-wasm-game-of-life
-
-## What's Inside
-
-Enter the new `wasm-game-of-life` project
-
-`cd wasm-game-of-life`
-
-and let's take a look at its contents:
-```
-wasm-game-of-life/
-├── Cargo.toml
-├── LICENSE_APACHE
-├── LICENSE_MIT
-├── README.md
-└── src
-    ├── lib.rs
-    └── utils.rs
-```
-Let's take a look at a couple of these files in detail.
-`wasm-game-of-life/Cargo.toml`
-
-The `Cargo.toml` file specifies dependencies and metadata for `cargo`, Rust's package manager and build tool. This one comes pre-configured with a `wasm-bindgen` dependency, a few optional dependencies we will dig into later, and the `crate-type` properly initialized for generating `.wasm` libraries.
-
-`wasm-game-of-life/src/lib.rs`
-
-The `src/lib.rs` file is the root of the Rust crate that we are compiling to WebAssembly. It uses `wasm-bindgen` to interface with JavaScript. It imports the `window.alert` JavaScript function, and exports the `greet` Rust function, which alerts a greeting message.
+Let's see an example of how to run the WASI version of "Hello, World!". 
 
 ```
-extern crate cfg_if;
-extern crate wasm_bindgen;
-
-mod utils;
-
-use cfg_if::cfg_if;
-use wasm_bindgen::prelude::*;
-
-cfg_if! {
-    // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-    // allocator.
-    if #[cfg(feature = "wee_alloc")] {
-        extern crate wee_alloc;
-        #[global_allocator]
-        static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-    }
-}
-
-#[wasm_bindgen]
-extern {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, wasm-game-of-life!");
-}
+$ cargo new wasi-hello-world
+     Created binary (application) `wasi-hello-world` package
+$ cd wasi-hello-world
 ```
 
-`wasm-game-of-life/src/utils.rs`
+This creates a `wasi-hello-world` folder which has a default `Cargo.toml` and `src/main.rs.` The `main.rs` is the entry point for our program and currently contains `println!("Hello, world!");`. Everything should be set up for us to execute (no code needed!) so let's run the code inside of the `wasi-hello-world` directory:
 
-The `src/utils.rs` module provides common utilities to make working with Rust compiled to WebAssembly easier. We will take a look at some of these utilities in more detail later in the tutorial, such as when we look at debugging our wasm code, but we can ignore this file for now.
-
-## Build the Project
-
-We use `wasm-pack` to orchestrate the following build steps:
-
-    Ensure that we have Rust 1.30 or newer and the wasm32-unknown-unknown target installed via rustup,
-    Compile our Rust sources into a WebAssembly .wasm binary via cargo,
-    Use wasm-bindgen to generate the JavaScript API for using our Rust-generated WebAssembly.
-
-To do all of that, run this command inside the project directory:
-
-`wasm-pack build`
-
-When the build has completed, we can find its artifacts in the pkg directory, and it should have these contents:
+Ok, now that we've got a runtime installed, let's retry executing our binary:
 
 ```
-pkg/
-├── package.json
-├── README.md
-├── wasm_game_of_life_bg.wasm
-├── wasm_game_of_life.d.ts
-└── wasm_game_of_life.js
-
+$ cargo wasi run
+info: downloading component 'rust-std' for 'wasm32-wasi'
+info: installing component 'rust-std' for 'wasm32-wasi'
+   Compiling wasi-hello-world v0.1.0 (/code/wasi-hello-world)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.15s
+     Running `/.cargo/bin/cargo-wasi target/wasm32-wasi/debug/wasi-hello-world.wasm`
+     Running `target/wasm32-wasi/debug/wasi-hello-world.wasm`
+Hello, world!
 ```
 
-The `README.md `file is copied from the main project, but the others are completely new.
+Success! The command first used rustup to install the Rust wasm32-wasi target automatically, and then we executed cargo to build the WebAssembly binary. Finally wasmtime was used and we can see that Hello, world! was printed by our program.
 
-`wasm-game-of-life/pkg/wasm_game_of_life_bg.wasm`
+## cargo wasi build
 
-The .wasm file is the WebAssembly binary that is generated by the Rust compiler from our Rust sources. It contains the compiled-to-wasm versions of all of our Rust functions and data. For example, it has an exported "greet" function.
-wasm-game-of-life/pkg/wasm_game_of_life.js
-
-The .js file is generated by wasm-bindgen and contains JavaScript glue for importing DOM and JavaScript functions into Rust and exposing a nice API to the WebAssembly functions to JavaScript. For example, there is a JavaScript greet function that wraps the greet function exported from the WebAssembly module. Right now, this glue isn't doing much, but when we start passing more interesting values back and forth between wasm and JavaScript, it will help shepherd those values across the boundary.
-
-```
-import * as wasm from './wasm_game_of_life_bg';
-
-// ...
-
-export function greet() {
-    return wasm.greet();
-}
-```
-
-`wasm-game-of-life/pkg/wasm_game_of_life.d.ts`
-
-The .d.ts file contains TypeScript type declarations for the JavaScript glue. If you are using TypeScript, you can have your calls into WebAssembly functions type checked, and your IDE can provide autocompletions and suggestions! If you aren't using TypeScript, you can safely ignore this file.
-
-`export function greet(): void;`
-
-`wasm-game-of-life/pkg/package.json`
-
-The package.json file contains metadata about the generated JavaScript and WebAssembly package. This is used by npm and JavaScript bundlers to determine dependencies across packages, package names, versions, and a bunch of other stuff. It helps us integrate with JavaScript tooling and allows us to publish our package to npm.
-
-```
-{
-  "name": "wasm-game-of-life",
-  "collaborators": [
-    "Your Name <your.email@example.com>"
-  ],
-  "description": null,
-  "version": "0.1.0",
-  "license": null,
-  "repository": null,
-  "files": [
-    "wasm_game_of_life_bg.wasm",
-    "wasm_game_of_life.d.ts"
-  ],
-  "main": "wasm_game_of_life.js",
-  "types": "wasm_game_of_life.d.ts"
-}
-
-```
-Putting it into a Web Page
-
-To take our wasm-game-of-life package and use it in a Web page, we use the create-wasm-app JavaScript project template.
-
-Run this command within the wasm-game-of-life directory:
-
-npm init wasm-app www
-
-Here's what our new wasm-game-of-life/www subdirectory contains:
-
-```
-wasm-game-of-life/www/
-├── bootstrap.js
-├── index.html
-├── index.js
-├── LICENSE-APACHE
-├── LICENSE-MIT
-├── package.json
-├── README.md
-└── webpack.config.js
-```
-Once again, let's take a closer look at some of these files.
-wasm-game-of-life/www/package.json
-
-This package.json comes pre-configured with webpack and webpack-dev-server dependencies, as well as a dependency on hello-wasm-pack, which is a version of the initial wasm-pack-template package that has been published to npm.
-wasm-game-of-life/www/webpack.config.js
-
-This file configures webpack and its local development server. It comes pre-configured, and you shouldn't have to tweak this at all to get webpack and its local development server working.
-wasm-game-of-life/www/index.html
-
-This is the root HTML file for the Web page. It doesn't do much other than load bootstrap.js, which is a very thin wrapper around index.js.
-```
-
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Hello wasm-pack!</title>
-  </head>
-  <body>
-    <script src="./bootstrap.js"></script>
-  </body>
-</html>
-```
-`wasm-game-of-life/www/index.js`
-
-The index.js is the main entry point for our Web page's JavaScript. It imports the hello-wasm-pack npm package, which contains the default wasm-pack-template's compiled WebAssembly and JavaScript glue, then it calls hello-wasm-pack's greet function.
-
-```
-import * as wasm from "hello-wasm-pack";
-
-wasm.greet();
-```
+This is the primary subcommand used to build WebAssembly code. This will build your crate for the `wasm32-wasi` target and run any postprocessing (like `wasm-bindgen` or `wasm-opt`) over any produced binary.
 
 
-Install the dependencies
+`$ cargo wasi build --release`
 
-First, ensure that the local development server and its dependencies are installed by running npm install within the wasm-game-of-life/www subdirectory:
-
-`npm install`
-
-This command only needs to be run once, and will install the webpack JavaScript bundler and its development server.
-
-    Note that webpack is not required for working with Rust and WebAssembly, it is just the bundler and development server we've chosen for convenience here. Parcel and Rollup should also support importing WebAssembly as ECMAScript modules. You can also use Rust and WebAssembly without a bundler if you prefer!
-
-Using our Local wasm-game-of-life Package in www
-
-Rather than use the hello-wasm-pack package from npm, we want to use our local wasm-game-of-life package instead. This will allow us to incrementally develop our Game of Life program.
-
-Open up wasm-game-of-life/www/package.json and edit the "dependencies" to include a "wasm-game-of-life": "file:../pkg" entry:
-```
-{
-  // ...
-  "dependencies": {
-    "wasm-game-of-life": "file:../pkg", // Add this line!
-    // ...
-  }
-}
-```
-Next, modify wasm-game-of-life/www/index.js to import wasm-game-of-life instead of the hello-wasm-pack package:
-
-```
-import * as wasm from "wasm-game-of-life";
-
-wasm.greet();
-```
-Since we declared a new dependency, we need to install it:
-
-`npm install`
-
-Our Web page is now ready to be served locally!
-Serving Locally
-
-Next, open a new terminal for the development server. Running the server in a new terminal lets us leave it running in the background, and doesn't block us from running other commands in the meantime. In the new terminal, run this command from within the wasm-game-of-life/www directory:
-
-`npm run start`
-
-Navigate your Web browser to http://localhost:8080/ and you should be greeted with an alert message:
-
-Screenshot of the "Hello, wasm-game-of-life!" Web page alert
-
-Anytime you make changes and want them reflected on http://localhost:8080/, just re-run the wasm-pack build command within the wasm-game-of-life directory.
+Output `*.wasm` files will be located in `target/wasm32-wasi/debug` for debug builds or `target/wasm32-wasi/release` for release builds.
